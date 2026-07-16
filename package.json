@@ -2,13 +2,11 @@
   "name": "ghl-telegram-integration",
   "version": "1.0.0",
   "main": "server.js",
-  "scripts": {
-    "start": "npm install && node server.js"
-  },
   "dependencies": {
     "express": "^4.19.2",
     "body-parser": "^1.20.2",
     "dotenv": "^16.4.5",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "telegram": "^2.22.2"
   }
 }
