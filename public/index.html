@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IntegraciÃ³n Telegram <-> GoHighLevel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-      --glass-bg: rgba(255, 255, 255, 0.03);
-      --glass-border: rgba(255, 255, 255, 0.08);
+      --bg-gradient: linear-gradient(135deg, #070b19 0%, #0f172a 100%);
+      --glass-bg: rgba(255, 255, 255, 0.02);
+      --glass-border: rgba(255, 255, 255, 0.06);
       --primary: #6366f1;
       --primary-hover: #4f46e5;
       --text: #f8fafc;
-      --text-muted: #94a3b8;
+      --text-muted: #64748b;
       --success: #10b981;
       --danger: #ef4444;
     }
@@ -37,25 +37,25 @@
 
     .container {
       width: 100%;
-      max-width: 800px;
-      background: var(--glass-bg);
+      max-width: 850px;
+      background: rgba(15, 23, 42, 0.6);
       border: 1px solid var(--glass-border);
-      backdrop-filter: blur(16px);
-      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
       padding: 40px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.7);
     }
 
     header {
       text-align: center;
-      margin-bottom: 40px;
+      margin-bottom: 35px;
     }
 
     header h1 {
-      font-size: 2.5rem;
+      font-size: 2.6rem;
       font-weight: 800;
       letter-spacing: -1px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       background: linear-gradient(to right, #818cf8, #c084fc);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -66,18 +66,60 @@
       font-size: 1.1rem;
     }
 
-    .setup-section {
+    /* Tabs Layout */
+    .tabs-nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--glass-border);
+      padding-bottom: 10px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 20px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border-radius: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
       background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      background: rgba(99, 102, 241, 0.08);
+      border-bottom: 2px solid var(--primary);
+      border-radius: 8px 8px 0 0;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .setup-section {
+      background: rgba(255, 255, 255, 0.01);
       border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 24px;
+      border-radius: 20px;
+      padding: 28px;
       margin-bottom: 30px;
     }
 
     .setup-section h2 {
-      font-size: 1.4rem;
-      margin-bottom: 16px;
+      font-size: 1.3rem;
+      margin-bottom: 20px;
       font-weight: 600;
+      color: #a5b4fc;
     }
 
     .input-group {
@@ -88,9 +130,9 @@
     }
 
     .input-group label {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: var(--text-muted);
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -100,22 +142,22 @@
       gap: 12px;
     }
 
-    input[type="text"] {
+    input[type="text"], input[type="password"] {
       flex: 1;
-      background: rgba(0, 0, 0, 0.2);
+      background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--glass-border);
       padding: 14px 20px;
-      border-radius: 12px;
+      border-radius: 14px;
       color: var(--text);
       font-family: inherit;
       font-size: 1rem;
       transition: all 0.3s ease;
     }
 
-    input[type="text"]:focus {
+    input[type="text"]:focus, input[type="password"]:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
     }
 
     button {
@@ -123,15 +165,12 @@
       color: var(--text);
       border: none;
       padding: 14px 28px;
-      border-radius: 12px;
+      border-radius: 14px;
       font-family: inherit;
       font-weight: 600;
       font-size: 1rem;
       cursor: pointer;
       transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     button:hover {
@@ -139,56 +178,63 @@
       transform: translateY(-1px);
     }
 
-    button:active {
-      transform: translateY(0);
+    button:disabled {
+      background: #334155;
+      color: #64748b;
+      cursor: not-allowed;
+      transform: none;
     }
 
-    .bot-list-section h2 {
-      font-size: 1.4rem;
+    .list-section h2 {
+      font-size: 1.3rem;
       margin-bottom: 16px;
       font-weight: 600;
+      color: #a5b4fc;
     }
 
-    .bot-list {
+    .item-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
     }
 
-    .bot-item {
+    .item-card {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.02);
+      padding: 18px 24px;
+      background: rgba(255, 255, 255, 0.01);
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
+      border-radius: 16px;
       transition: all 0.3s ease;
     }
 
-    .bot-item:hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(99, 102, 241, 0.3);
+    .item-card:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(99, 102, 241, 0.2);
     }
 
-    .bot-info h3 {
+    .item-info h3 {
       font-size: 1.1rem;
       font-weight: 600;
       margin-bottom: 4px;
     }
 
-    .bot-info p {
+    .item-info p {
       font-size: 0.9rem;
       color: var(--text-muted);
     }
 
     .btn-delete {
-      background: rgba(239, 68, 68, 0.1);
+      background: rgba(239, 68, 68, 0.08);
       color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.15);
       padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 0.9rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
 
     .btn-delete:hover {
@@ -198,28 +244,28 @@
 
     .empty-state {
       text-align: center;
-      padding: 40px;
+      padding: 30px;
       color: var(--text-muted);
       font-style: italic;
     }
 
     .alert {
       padding: 16px 20px;
-      border-radius: 12px;
+      border-radius: 14px;
       margin-bottom: 24px;
       font-size: 0.95rem;
       display: none;
     }
 
     .alert-success {
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.15);
       color: var(--success);
     }
 
     .alert-danger {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.2);
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.15);
       color: var(--danger);
     }
   </style>
@@ -228,47 +274,105 @@
 
 <div class="container">
   <header>
-    <h1>ConexiÃ³n Telegram Bots para GHL</h1>
-    <p>Administra los bots de Telegram que interactÃºan con tu bandeja de entrada de GoHighLevel</p>
+    <h1>ConexiÃ³n Telegram <-> GoHighLevel</h1>
+    <p>Conecta Bots o Cuentas Personales de Telegram a tu bandeja de entrada de GHL</p>
   </header>
 
   <div id="alert" class="alert"></div>
 
-  <div class="setup-section">
-    <h2>Vincular Nuevo Bot</h2>
-    <div class="input-group">
-      <label for="bot-token">Token del Bot de Telegram</label>
-      <div class="input-row">
-        <input type="text" id="bot-token" placeholder="Ej: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ">
-        <button id="btn-add">Registrar Bot</button>
+  <!-- Tabs Navigation -->
+  <div class="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab('bots')">Bots de Telegram</button>
+    <button class="tab-btn" onclick="switchTab('users')">Cuentas Personales</button>
+  </div>
+
+  <!-- TAB: BOTS -->
+  <div id="tab-bots" class="tab-content active">
+    <div class="setup-section">
+      <h2>Vincular Bot de Telegram</h2>
+      <div class="input-group">
+        <label for="bot-token">Token del Bot (de @BotFather)</label>
+        <div class="input-row">
+          <input type="text" id="bot-token" placeholder="Ej: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ">
+          <button id="btn-add-bot" onclick="addBot()">Registrar Bot</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="list-section">
+      <h2>Bots Vinculados</h2>
+      <div id="bot-list" class="item-list">
+        <div class="empty-state">Cargando bots...</div>
       </div>
     </div>
   </div>
 
-  <div class="bot-list-section">
-    <h2>Bots Vinculados en esta Cuenta</h2>
-    <div id="bot-list" class="bot-list">
-      <div class="empty-state">Cargando bots...</div>
+  <!-- TAB: USER ACCOUNTS -->
+  <div id="tab-users" class="tab-content">
+    <div class="setup-section" id="user-request-container">
+      <h2>Vincular Cuenta Personal de Telegram</h2>
+      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">
+        Ingresa tu nÃºmero de telÃ©fono en formato internacional (ej. +5491123456789) para iniciar sesiÃ³n con tu cuenta personal.
+      </p>
+      
+      <div class="input-group">
+        <label for="user-phone">NÃºmero de TelÃ©fono</label>
+        <div class="input-row">
+          <input type="text" id="user-phone" placeholder="Ej: +5491123456789">
+          <button id="btn-request-code" onclick="requestCode()">Enviar CÃ³digo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Verification Code Container -->
+    <div class="setup-section" id="user-verify-container" style="display: none;">
+      <h2>VerificaciÃ³n de CÃ³digo de Telegram</h2>
+      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">
+        Se ha enviado un cÃ³digo de acceso a tu aplicaciÃ³n de Telegram.
+      </p>
+
+      <div class="input-group" style="margin-bottom: 15px;">
+        <label for="user-code">CÃ³digo de VerificaciÃ³n</label>
+        <input type="text" id="user-code" placeholder="CÃ³digo recibido en Telegram">
+      </div>
+
+      <div class="input-group" style="margin-bottom: 20px;">
+        <label for="user-password">ContraseÃ±a 2FA (Opcional)</label>
+        <input type="password" id="user-password" placeholder="Ingresa tu contraseÃ±a si tienes verificaciÃ³n en dos pasos activa">
+      </div>
+
+      <div class="input-row">
+        <button id="btn-verify-code" onclick="verifyCode()">Verificar e Iniciar SesiÃ³n</button>
+        <button style="background: #334155;" onclick="resetUserForm()">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="list-section">
+      <h2>Cuentas Personales Vinculadas</h2>
+      <div id="user-list" class="item-list">
+        <div class="empty-state">Cargando cuentas...</div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-  // Obtener locationId de la URL
   const urlParams = new URLSearchParams(window.location.search);
   const locationId = urlParams.get('locationId');
 
   const alertEl = document.getElementById('alert');
   const botListEl = document.getElementById('bot-list');
-  const botTokenInput = document.getElementById('bot-token');
-  const btnAdd = document.getElementById('btn-add');
+  const userListEl = document.getElementById('user-list');
+
+  // Phone code states
+  let currentPhone = '';
+  let currentPhoneCodeHash = '';
 
   if (!locationId) {
-    showAlert('Error: Location ID de GoHighLevel no especificado en la URL. Inicia sesiÃ³n desde tu GHL App.', 'danger');
-    btnAdd.disabled = true;
-    botTokenInput.disabled = true;
+    showAlert('Error: Location ID de GHL no especificado en la URL. Accede desde tu Marketplace de GoHighLevel.', 'danger');
+    disableControls();
   } else {
-    loadBots();
+    loadAllData();
   }
 
   function showAlert(message, type) {
@@ -277,96 +381,243 @@
     alertEl.style.display = 'block';
     setTimeout(() => {
       alertEl.style.display = 'none';
-    }, 5000);
+    }, 6000);
   }
 
+  function disableControls() {
+    const btns = document.querySelectorAll('button');
+    btns.forEach(b => b.disabled = true);
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(i => i.disabled = true);
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+    if (tab === 'bots') {
+      document.querySelector('.tab-btn[onclick*="bots"]').classList.add('active');
+      document.getElementById('tab-bots').classList.add('active');
+    } else {
+      document.querySelector('.tab-btn[onclick*="users"]').classList.add('active');
+      document.getElementById('tab-users').classList.add('active');
+    }
+  }
+
+  function loadAllData() {
+    loadBots();
+    loadUsers();
+  }
+
+  // ---------------- BOTS ----------------
   async function loadBots() {
     try {
       const res = await fetch(`/api/bots?locationId=${locationId}`);
       const data = await res.json();
-
       if (data.success) {
         renderBots(data.bots);
       } else {
-        showAlert(data.error || 'Error al cargar bots.', 'danger');
+        botListEl.innerHTML = `<div class="empty-state">Error: ${data.error}</div>`;
       }
     } catch (e) {
-      console.error(e);
-      botListEl.innerHTML = '<div class="empty-state">Error de conexiÃ³n al cargar bots.</div>';
+      botListEl.innerHTML = '<div class="empty-state">Error de red al cargar bots.</div>';
     }
   }
 
   function renderBots(bots) {
     if (bots.length === 0) {
-      botListEl.innerHTML = '<div class="empty-state">No hay bots de Telegram vinculados a esta locaciÃ³n de GHL.</div>';
+      botListEl.innerHTML = '<div class="empty-state">No hay bots de Telegram vinculados.</div>';
       return;
     }
-
     botListEl.innerHTML = '';
     bots.forEach(bot => {
-      const item = document.createElement('div');
-      item.className = 'bot-item';
-      item.innerHTML = `
-        <div class="bot-info">
+      const card = document.createElement('div');
+      card.className = 'item-card';
+      card.innerHTML = `
+        <div class="item-info">
           <h3>${bot.name}</h3>
-          <p>@${bot.username}</p>
+          <p>@${bot.username} (Bot)</p>
         </div>
         <button class="btn-delete" onclick="deleteBot(${bot.id})">Eliminar</button>
       `;
-      botListEl.appendChild(item);
+      botListEl.appendChild(card);
     });
   }
 
-  btnAdd.addEventListener('click', async () => {
-    const token = botTokenInput.value.trim();
-    if (!token) {
-      showAlert('Por favor ingresa un token vÃ¡lido de bot.', 'danger');
-      return;
-    }
+  async function addBot() {
+    const inputVal = document.getElementById('bot-token').value.trim();
+    if (!inputVal) return showAlert('Por favor escribe un token de bot.', 'danger');
 
-    btnAdd.disabled = true;
-    btnAdd.textContent = 'Registrando...';
+    const btn = document.getElementById('btn-add-bot');
+    btn.disabled = true;
+    btn.textContent = 'Registrando...';
 
     try {
       const res = await fetch('/api/bots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ botToken: token, locationId })
+        body: JSON.stringify({ botToken: inputVal, locationId })
       });
       const data = await res.json();
-
       if (data.success) {
-        showAlert('Â¡Bot registrado y webhook configurado exitosamente!', 'success');
-        botTokenInput.value = '';
+        showAlert('Bot registrado y webhook configurado exitosamente.', 'success');
+        document.getElementById('bot-token').value = '';
         loadBots();
       } else {
-        showAlert(data.error || 'No se pudo registrar el bot.', 'danger');
+        showAlert(data.error || 'Error al vincular el bot.', 'danger');
       }
     } catch (e) {
-      showAlert('Error de red al registrar el bot.', 'danger');
+      showAlert('Error de red al conectar.', 'danger');
     } finally {
-      btnAdd.disabled = false;
-      btnAdd.textContent = 'Registrar Bot';
+      btn.disabled = false;
+      btn.textContent = 'Registrar Bot';
     }
-  });
+  }
 
-  async function deleteBot(botId) {
-    if (!confirm('Â¿EstÃ¡s seguro de eliminar este bot? Se desconectarÃ¡ de Telegram.')) return;
+  async function deleteBot(id) {
+    if (!confirm('Â¿Deseas desvincular este bot de Telegram?')) return;
+    try {
+      const res = await fetch(`/api/bots/${id}?locationId=${locationId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Bot eliminado.', 'success');
+        loadBots();
+      } else {
+        showAlert(data.error, 'danger');
+      }
+    } catch (e) {
+      showAlert('Error de red.', 'danger');
+    }
+  }
+
+  // ---------------- PERSONAL USERS ----------------
+  async function loadUsers() {
+    try {
+      const res = await fetch(`/api/telegram-users?locationId=${locationId}`);
+      const data = await res.json();
+      if (data.success) {
+        renderUsers(data.users);
+      } else {
+        userListEl.innerHTML = `<div class="empty-state">Error: ${data.error}</div>`;
+      }
+    } catch (e) {
+      userListEl.innerHTML = '<div class="empty-state">Error de red al cargar cuentas.</div>';
+    }
+  }
+
+  function renderUsers(users) {
+    if (users.length === 0) {
+      userListEl.innerHTML = '<div class="empty-state">No hay cuentas personales vinculadas.</div>';
+      return;
+    }
+    userListEl.innerHTML = '';
+    users.forEach(u => {
+      const card = document.createElement('div');
+      card.className = 'item-card';
+      card.innerHTML = `
+        <div class="item-info">
+          <h3>${u.name}</h3>
+          <p>${u.phone} ${u.username ? `(@${u.username})` : ''}</p>
+        </div>
+        <button class="btn-delete" onclick="deleteUser('${u.phone}')">Desconectar</button>
+      `;
+      userListEl.appendChild(card);
+    });
+  }
+
+  async function requestCode() {
+    const phoneInput = document.getElementById('user-phone').value.trim();
+    if (!phoneInput) return showAlert('Ingresa un nÃºmero en formato internacional (+ y cÃ³digo de paÃ­s).', 'danger');
+
+    const btn = document.getElementById('btn-request-code');
+    btn.disabled = true;
+    btn.textContent = 'Solicitando...';
 
     try {
-      const res = await fetch(`/api/bots/${botId}?locationId=${locationId}`, {
-        method: 'DELETE'
+      const res = await fetch('/api/telegram-user/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneInput })
       });
       const data = await res.json();
-
       if (data.success) {
-        showAlert('Bot eliminado y desvinculado con Ã©xito.', 'success');
-        loadBots();
+        currentPhone = phoneInput;
+        currentPhoneCodeHash = data.phoneCodeHash;
+        
+        document.getElementById('user-request-container').style.display = 'none';
+        document.getElementById('user-verify-container').style.display = 'block';
+        showAlert('CÃ³digo enviado a tu Telegram. EscrÃ­belo para continuar.', 'success');
       } else {
-        showAlert(data.error || 'No se pudo eliminar el bot.', 'danger');
+        showAlert(data.error || 'No se pudo enviar el cÃ³digo.', 'danger');
       }
     } catch (e) {
-      showAlert('Error de red al eliminar el bot.', 'danger');
+      showAlert('Error de red al solicitar el cÃ³digo.', 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enviar CÃ³digo';
+    }
+  }
+
+  async function verifyCode() {
+    const code = document.getElementById('user-code').value.trim();
+    const password = document.getElementById('user-password').value.trim();
+    if (!code) return showAlert('Por favor ingresa el cÃ³digo de verificaciÃ³n.', 'danger');
+
+    const btn = document.getElementById('btn-verify-code');
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
+    try {
+      const res = await fetch('/api/telegram-user/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: currentPhone,
+          phoneCodeHash: currentPhoneCodeHash,
+          code,
+          password,
+          locationId
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Cuenta personal vinculada con Ã©xito.', 'success');
+        resetUserForm();
+        loadUsers();
+      } else {
+        showAlert(data.error || 'CÃ³digo incorrecto o error al verificar.', 'danger');
+      }
+    } catch (e) {
+      showAlert('Error de red al verificar el cÃ³digo.', 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Verificar e Iniciar SesiÃ³n';
+    }
+  }
+
+  function resetUserForm() {
+    currentPhone = '';
+    currentPhoneCodeHash = '';
+    document.getElementById('user-phone').value = '';
+    document.getElementById('user-code').value = '';
+    document.getElementById('user-password').value = '';
+    document.getElementById('user-request-container').style.display = 'block';
+    document.getElementById('user-verify-container').style.display = 'none';
+  }
+
+  async function deleteUser(phone) {
+    if (!confirm(`Â¿Deseas desvincular y desconectar la cuenta ${phone}?`)) return;
+    try {
+      const res = await fetch(`/api/telegram-users/${encodeURIComponent(phone)}?locationId=${locationId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Cuenta desvinculada.', 'success');
+        loadUsers();
+      } else {
+        showAlert(data.error, 'danger');
+      }
+    } catch (e) {
+      showAlert('Error de red.', 'danger');
     }
   }
 </script>
