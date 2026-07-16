@@ -5,6 +5,8 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const axios = require('axios');
+const { TelegramClient, Api } = require('telegram');
+const { StringSession } = require('telegram/sessions');
 
 dotenv.config();
 
@@ -15,6 +17,10 @@ const CLIENT_ID = process.env.GHL_CLIENT_ID || '6a57c1698099a144df50c33b-mrmegr2
 const CLIENT_SECRET = process.env.GHL_CLIENT_SECRET || 'f75361c4-58ba-425f-a309-7f0ca5973505';
 const CONVERSATION_PROVIDER_ID = process.env.GHL_CONVERSATION_PROVIDER_ID || '';
 
+// Credentials for Telegram MTProto API (Default to Webogram/Telegram Web client API keys if not in env)
+const TELEGRAM_API_ID = parseInt(process.env.TELEGRAM_API_ID || '2040');
+const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || 'b18441a1bf60893c194d20f310beb2bc';
+
 // ----------------------------------------------------
 // BASE DE DATOS JSON (CERO DEPENDENCIAS NATIVAS)
 // ----------------------------------------------------
@@ -24,7 +30,8 @@ const dbPath = path.join(dbDir, 'db.json');
 let dbState = {
   ghl_credentials: [],
   telegram_bots: [],
-  contacts_mapping: []
+  contacts_mapping: [],
+  telegram_users: [] // Stores personal account sessions: { phone, session_str, first_name, username, location_id }
 };
 
 function loadDb() {
@@ -70,6 +77,16 @@ async function dbGet(queryType, params) {
     const locId = params[1];
     return dbState.telegram_bots.find(b => b.bot_username.toLowerCase() === username && b.ghl_location_id === locId);
   }
+  if (queryType === 'user_by_phone') {
+    const phone = params[0];
+    const locId = params[1];
+    return dbState.telegram_users.find(u => u.phone === phone && u.location_id === locId);
+  }
+  if (queryType === 'user_by_username') {
+    const username = params[0].toLowerCase();
+    const locId = params[1];
+    return dbState.telegram_users.find(u => u.username && u.username.toLowerCase() === username && u.location_id === locId);
+  }
   if (queryType === 'mapping_by_tg') {
     return dbState.contacts_mapping.find(m => m.telegram_chat_id === params[0] && m.location_id === params[1]);
   }
@@ -83,7 +100,14 @@ async function dbAllBots(locationId) {
   loadDb();
   return dbState.telegram_bots
     .filter(b => b.ghl_location_id === locationId)
-    .map(b => ({ id: b.bot_id, username: b.bot_username, name: b.bot_name }));
+    .map(b => ({ id: b.bot_id, username: b.bot_username, name: b.bot_name, type: 'bot' }));
+}
+
+async function dbAllUsers(locationId) {
+  loadDb();
+  return dbState.telegram_users
+    .filter(u => u.location_id === locationId)
+    .map(u => ({ phone: u.phone, username: u.username, name: u.first_name, type: 'user' }));
 }
 
 async function dbSaveCreds(location_id, access_token, refresh_token, expires_at) {
@@ -106,6 +130,18 @@ async function dbSaveBot(bot_token, bot_username, bot_name, ghl_location_id) {
   return bot_id;
 }
 
+async function dbSaveUserSession(phone, session_str, first_name, username, location_id) {
+  loadDb();
+  const index = dbState.telegram_users.findIndex(u => u.phone === phone && u.location_id === location_id);
+  const userData = { phone, session_str, first_name, username, location_id };
+  if (index > -1) {
+    dbState.telegram_users[index] = userData;
+  } else {
+    dbState.telegram_users.push(userData);
+  }
+  saveDb();
+}
+
 async function dbSaveMapping(ghl_contact_id, telegram_chat_id, last_bot_id, location_id) {
   loadDb();
   dbState.contacts_mapping.push({ ghl_contact_id, telegram_chat_id, last_bot_id, location_id });
@@ -121,15 +157,21 @@ async function dbUpdateMappingBot(ghl_contact_id, last_bot_id) {
   }
 }
 
-async function dbDeleteMapping(botId) {
+async function dbDeleteMapping(botOrPhoneId) {
   loadDb();
-  dbState.contacts_mapping = dbState.contacts_mapping.filter(m => m.last_bot_id !== botId);
+  dbState.contacts_mapping = dbState.contacts_mapping.filter(m => m.last_bot_id !== botOrPhoneId);
   saveDb();
 }
 
 async function dbDeleteBot(botId) {
   loadDb();
   dbState.telegram_bots = dbState.telegram_bots.filter(b => b.bot_id !== botId);
+  saveDb();
+}
+
+async function dbDeleteUser(phone, locationId) {
+  loadDb();
+  dbState.telegram_users = dbState.telegram_users.filter(u => !(u.phone === phone && u.location_id === locationId));
   saveDb();
 }
 
@@ -185,6 +227,7 @@ async function createGHLContact(locationId, firstName, lastName, telegramUsernam
         lastName,
         name: fullName,
         tags: ['Telegram'],
+        locationId: locationId // REQUIRED in GHL v2! Fixes the 403 error.
       },
       {
         headers: {
@@ -244,7 +287,7 @@ async function sendGHLInboundMessage(locationId, contactId, messageText) {
 }
 
 // ----------------------------------------------------
-// CLIENTE TELEGRAM
+// CLIENTE TELEGRAM (BOT API)
 // ----------------------------------------------------
 async function getBotInfo(token) {
   const response = await axios.get(`https://api.telegram.org/bot${token}/getMe`);
@@ -272,6 +315,89 @@ async function sendTelegramMessage(token, chatId, text) {
     text: text,
   });
   return response.data.ok;
+}
+
+// ----------------------------------------------------
+// CLIENTES TELEGRAM PERSONALES (MTPROTO CLIENT MANAGER)
+// ----------------------------------------------------
+const activeClients = new Map(); // Keep-alive active MTProto clients: phone_location -> client
+const pendingLoginClients = new Map(); // Temporary clients waiting for login code: phone -> client
+
+async function startUserClient(phone, sessionStr, locationId) {
+  const key = `${phone}_${locationId}`;
+  if (activeClients.has(key)) {
+    try {
+      const existing = activeClients.get(key);
+      if (existing.connected) return existing;
+    } catch(e) {}
+  }
+
+  console.log(`Inicializando cliente de Telegram personal para: ${phone}...`);
+  const client = new TelegramClient(new StringSession(sessionStr), TELEGRAM_API_ID, TELEGRAM_API_HASH, {
+    connectionRetries: 5,
+  });
+
+  await client.connect();
+
+  // Setup message handler for incoming messages
+  client.addEventHandler(async (update) => {
+    if (update && update.message && !update.message.out && update.message.peerId && update.message.peerId.userId) {
+      const fromId = update.message.peerId.userId.toString();
+      const text = update.message.message;
+      if (!text) return;
+
+      try {
+        const sender = await client.getEntity(update.message.peerId);
+        const firstName = sender.firstName || 'Telegram';
+        const lastName = sender.lastName || 'User';
+        const username = sender.username || '';
+
+        console.log(`Mensaje personal recibido en cuenta ${phone} de ${firstName} (ID ${fromId}): ${text}`);
+
+        let contactMapping = await dbGet('mapping_by_tg', [fromId, locationId]);
+        let ghlContactId;
+
+        if (!contactMapping) {
+          console.log(`Creando nuevo contacto en GHL desde cuenta personal: ${fromId}...`);
+          ghlContactId = await createGHLContact(
+            locationId,
+            firstName,
+            lastName,
+            username,
+            fromId
+          );
+          await dbSaveMapping(ghlContactId, fromId, phone, locationId);
+        } else {
+          ghlContactId = contactMapping.ghl_contact_id;
+          await dbUpdateMappingBot(ghlContactId, phone);
+        }
+
+        const label = `[Cuenta: ${phone}]`;
+        const userLabel = username ? `@${username}` : firstName;
+        const formattedMessage = `${label} ${userLabel}: ${text}`;
+
+        await sendGHLInboundMessage(locationId, ghlContactId, formattedMessage);
+      } catch (err) {
+        console.error("Error al enrutar mensaje de cuenta personal a GHL:", err.message);
+      }
+    }
+  });
+
+  activeClients.set(key, client);
+  console.log(`Cliente de Telegram personal para ${phone} listo y escuchando.`);
+  return client;
+}
+
+// Background initialization of all user accounts on startup
+async function initSavedUserClients() {
+  loadDb();
+  for (const user of dbState.telegram_users) {
+    try {
+      await startUserClient(user.phone, user.session_str, user.location_id);
+    } catch (e) {
+      console.error(`No se pudo inicializar la sesiÃ³n del telÃ©fono ${user.phone}:`, e.message);
+    }
+  }
 }
 
 // ----------------------------------------------------
@@ -391,7 +517,7 @@ app.post('/webhooks/telegram/:botId', async (req, res) => {
   }
 
   const { chat, from, text } = update.message;
-  const telegramChatId = chat.id;
+  const telegramChatId = chat.id.toString();
   const firstName = from.first_name || 'Telegram';
   const lastName = from.last_name || 'User';
   const telegramUsername = from.username || '';
@@ -455,34 +581,57 @@ app.post('/webhooks/ghl/outbound', verifyGHLSignature, async (req, res) => {
     let targetBotId = last_bot_id;
     let cleanBody = body.trim();
 
+    // Check if the agent is routing the message manually using "/botname " or "/phone "
     if (cleanBody.startsWith('/')) {
       const spaceIndex = cleanBody.indexOf(' ');
       if (spaceIndex > 0) {
-        const requestedBotName = cleanBody.substring(1, spaceIndex).toLowerCase();
+        const requestedName = cleanBody.substring(1, spaceIndex).toLowerCase();
         const messageContent = cleanBody.substring(spaceIndex + 1).trim();
 
-        const botByName = await dbGet('bot_by_username', [requestedBotName, locationId]);
+        // 1. Try finding a bot with that username
+        const botByName = await dbGet('bot_by_username', [requestedName, locationId]);
         if (botByName) {
           targetBotId = botByName.bot_id;
           cleanBody = messageContent;
           await dbUpdateMappingBot(contactId, targetBotId);
+        } else {
+          // 2. Try finding a user account with that username
+          const userByName = await dbGet('user_by_username', [requestedName, locationId]);
+          if (userByName) {
+            targetBotId = userByName.phone; // phone is used as targetBotId for user clients
+            cleanBody = messageContent;
+            await dbUpdateMappingBot(contactId, targetBotId);
+          }
         }
       }
     }
 
-    const bot = await dbGet('bot_by_id', [targetBotId]);
-    if (!bot) {
-      console.error(`Bot ID ${targetBotId} no encontrado para despachar el mensaje`);
-      return;
+    // Determine if sending via a bot token or personal client
+    if (typeof targetBotId === 'string' && targetBotId.startsWith('+')) {
+      // It's a personal client session (mapped via phone number)
+      const clientKey = `${targetBotId}_${locationId}`;
+      const client = activeClients.get(clientKey);
+      if (!client) {
+        throw new Error(`Cliente de Telegram para ${targetBotId} no estÃ¡ activo.`);
+      }
+      await client.sendMessage(telegram_chat_id, { message: cleanBody });
+      console.log(`Mensaje enviado con Ã©xito vÃ­a cuenta personal ${targetBotId} hacia chat ID ${telegram_chat_id}`);
+    } else {
+      // It's a Telegram Bot API bot
+      const bot = await dbGet('bot_by_id', [targetBotId]);
+      if (!bot) {
+        console.error(`Bot ID ${targetBotId} no encontrado en la base de datos.`);
+        return;
+      }
+      await sendTelegramMessage(bot.bot_token, telegram_chat_id, cleanBody);
+      console.log(`Mensaje enviado con Ã©xito vÃ­a bot @${bot.bot_username} hacia chat ID ${telegram_chat_id}`);
     }
-
-    await sendTelegramMessage(bot.bot_token, telegram_chat_id, cleanBody);
   } catch (error) {
     console.error('Error al procesar mensaje de GHL hacia Telegram:', error.message);
   }
 });
 
-// 3. APIS DE CONFIGURACIÃ“N DEL PANEL
+// 3. APIS DE CONFIGURACIÃ“N DEL PANEL (BOTS)
 app.post('/api/bots', async (req, res) => {
   const { botToken, locationId } = req.body;
   console.log("POST /api/bots recibido con locationId:", locationId);
@@ -554,16 +703,145 @@ app.delete('/api/bots/:botId', async (req, res) => {
   }
 });
 
+// 4. APIS DE CONFIGURACIÃ“N DEL PANEL (CUENTAS DE TELEGRAM PERSONALES)
+app.post('/api/telegram-user/request-code', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) {
+    return res.status(400).json({ error: 'NÃºmero de telÃ©fono es obligatorio.' });
+  }
+
+  try {
+    console.log(`Recibida solicitud de cÃ³digo de login para cuenta personal: ${phone}`);
+    const client = new TelegramClient(new StringSession(""), TELEGRAM_API_ID, TELEGRAM_API_HASH, {
+      connectionRetries: 5,
+    });
+    await client.connect();
+
+    const { phoneCodeHash } = await client.sendCode(
+      {
+        apiId: TELEGRAM_API_ID,
+        apiHash: TELEGRAM_API_HASH,
+      },
+      phone
+    );
+
+    pendingLoginClients.set(phone, { client, phoneCodeHash });
+    res.json({ success: true, phoneCodeHash });
+  } catch (error) {
+    console.error(`Error al solicitar cÃ³digo de Telegram:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/telegram-user/verify-code', async (req, res) => {
+  const { phone, phoneCodeHash, code, password, locationId } = req.body;
+  if (!phone || !code || !locationId) {
+    return res.status(400).json({ error: 'TelÃ©fono, cÃ³digo y locationId son obligatorios.' });
+  }
+
+  try {
+    console.log(`Recibida verificaciÃ³n de cÃ³digo para: ${phone}`);
+    const pending = pendingLoginClients.get(phone);
+    if (!pending) {
+      return res.status(400).json({ error: 'SesiÃ³n de login no iniciada o expirada. Por favor solicita un nuevo cÃ³digo.' });
+    }
+
+    const { client } = pending;
+    
+    // Sign in using GramJS client
+    await client.signIn({
+      phoneNumber: phone,
+      phoneCodeHash: phoneCodeHash || pending.phoneCodeHash,
+      phoneCode: code,
+      password: password ? async () => password : undefined,
+    });
+
+    const sessionStr = client.session.save();
+    
+    // Get authenticated user info
+    const me = await client.getMe();
+    const firstName = me.firstName || 'Cuenta Personal';
+    const username = me.username || '';
+
+    console.log(`Login personal exitoso. Nombre: ${firstName}, @${username}`);
+
+    // Save session in JSON db
+    await dbSaveUserSession(phone, sessionStr, firstName, username, locationId);
+    
+    // Remove from pending list and register as active
+    pendingLoginClients.delete(phone);
+    
+    // Start active background listener
+    await startUserClient(phone, sessionStr, locationId);
+
+    res.json({
+      success: true,
+      message: 'Cuenta personal vinculada con Ã©xito.',
+      user: {
+        phone,
+        name: firstName,
+        username
+      }
+    });
+  } catch (error) {
+    console.error(`Error al verificar cÃ³digo de Telegram:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/telegram-users', async (req, res) => {
+  const locationId = req.query.locationId;
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId es obligatorio.' });
+  }
+
+  try {
+    const users = await dbAllUsers(locationId);
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/telegram-users/:phone', async (req, res) => {
+  const phone = req.params.phone;
+  const locationId = req.query.locationId;
+
+  if (!locationId) {
+    return res.status(400).json({ error: 'locationId es obligatorio.' });
+  }
+
+  try {
+    const key = `${phone}_${locationId}`;
+    const client = activeClients.get(key);
+    if (client) {
+      await client.disconnect().catch(e => console.warn(e.message));
+      activeClients.delete(key);
+    }
+
+    await dbDeleteMapping(phone);
+    await dbDeleteUser(phone, locationId);
+
+    res.json({ success: true, message: 'Cuenta personal desvinculada con Ã©xito.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/debug-db', (req, res) => {
   loadDb();
   res.json(dbState);
 });
 
+// Start the server and load existing clients
 const startServer = async () => {
   try {
     app.listen(PORT, () => {
       console.log(`Servidor de IntegraciÃ³n GHL-Telegram escuchando en puerto ${PORT}`);
     });
+    
+    // Iniciar clientes personales de telegram en segundo plano
+    await initSavedUserClients();
   } catch (error) {
     console.error('Error al inicializar la base de datos o arrancar el servidor:', error);
     process.exit(1);
